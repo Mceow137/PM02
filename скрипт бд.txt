@@ -1,0 +1,407 @@
+USE master;
+GO
+
+IF NOT EXISTS (SELECT name FROM sys.databases WHERE name = 'МедицинскаяЛаборатория')
+BEGIN
+    CREATE DATABASE МедицинскаяЛаборатория;
+    PRINT 'База данных МедицинскаяЛаборатория создана';
+END
+ELSE
+    PRINT 'База данных МедицинскаяЛаборатория уже существует';
+GO
+
+USE МедицинскаяЛаборатория;
+GO
+
+-- 2. Создание таблиц (если они еще не существуют)
+
+-- Таблица Ролей
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Роли')
+BEGIN
+    CREATE TABLE Роли (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        название NVARCHAR(50) NOT NULL,
+        описание NVARCHAR(255) NULL
+    );
+    PRINT 'Таблица Роли создана';
+END
+GO
+
+-- Таблица Пользователей
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Пользователи')
+BEGIN
+    CREATE TABLE Пользователи (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        логин NVARCHAR(50) NOT NULL UNIQUE,
+        пароль NVARCHAR(255) NOT NULL,
+        фамилия NVARCHAR(50) NOT NULL,
+        имя NVARCHAR(50) NOT NULL,
+        отчество NVARCHAR(50) NULL,
+        фото VARBINARY(MAX) NULL,
+        id_роли INT NOT NULL FOREIGN KEY REFERENCES Роли(id),
+        последний_вход DATETIME NULL,
+        активен BIT DEFAULT 1,
+        дата_создания DATETIME DEFAULT GETDATE(),
+        дата_изменения DATETIME DEFAULT GETDATE()
+    );
+    PRINT 'Таблица Пользователи создана';
+END
+GO
+
+-- Таблица Страховых компаний
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'СтраховыеКомпании')
+BEGIN
+    CREATE TABLE СтраховыеКомпании (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        название NVARCHAR(100) NOT NULL,
+        адрес NVARCHAR(255) NULL,
+        ИНН NVARCHAR(20) NULL,
+        расчетный_счет NVARCHAR(20) NULL,
+        БИК NVARCHAR(9) NULL,
+        телефон NVARCHAR(20) NULL,
+        email NVARCHAR(100) NULL
+    );
+    PRINT 'Таблица СтраховыеКомпании создана';
+END
+GO
+
+-- Таблица Пациентов
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Пациенты')
+BEGIN
+    CREATE TABLE Пациенты (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        логин NVARCHAR(50) NULL UNIQUE,
+        пароль NVARCHAR(255) NULL,
+        фамилия NVARCHAR(50) NOT NULL,
+        имя NVARCHAR(50) NOT NULL,
+        отчество NVARCHAR(50) NULL,
+        дата_рождения DATE NOT NULL,
+        серия_паспорта NVARCHAR(4) NULL,
+        номер_паспорта NVARCHAR(6) NULL,
+        телефон NVARCHAR(20) NULL,
+        email NVARCHAR(100) NULL,
+        номер_полиса NVARCHAR(20) NULL,
+        тип_полиса NVARCHAR(10) NULL,
+        id_страховой_компании INT NULL FOREIGN KEY REFERENCES СтраховыеКомпании(id),
+        дата_регистрации DATETIME DEFAULT GETDATE()
+    );
+    PRINT 'Таблица Пациенты создана';
+END
+GO
+
+-- Таблица Услуг
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Услуги')
+BEGIN
+    CREATE TABLE Услуги (
+        код INT PRIMARY KEY,
+        наименование NVARCHAR(200) NOT NULL,
+        стоимость DECIMAL(10, 2) NOT NULL,
+        срок_выполнения INT NULL,
+        среднее_отклонение DECIMAL(10, 2) NULL,
+        описание NVARCHAR(MAX) NULL
+    );
+    PRINT 'Таблица Услуги создана';
+END
+GO
+
+-- Таблица Заказов
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Заказы')
+BEGIN
+    CREATE TABLE Заказы (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        id_пациента INT NOT NULL FOREIGN KEY REFERENCES Пациенты(id),
+        штрих_код NVARCHAR(50) NULL UNIQUE,
+        дата_создания DATETIME DEFAULT GETDATE(),
+        статус NVARCHAR(20) DEFAULT 'Новый',
+        в_архиве BIT DEFAULT 0,
+        дата_закрытия DATETIME NULL,
+        id_врача INT NULL FOREIGN KEY REFERENCES Пользователи(id),
+        комментарий NVARCHAR(255) NULL
+    );
+    PRINT 'Таблица Заказы создана';
+END
+GO
+
+-- Таблица Услуг в заказе
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'УслугиВЗаказе')
+BEGIN
+    CREATE TABLE УслугиВЗаказе (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        id_заказа INT NOT NULL FOREIGN KEY REFERENCES Заказы(id),
+        код_услуги INT NOT NULL FOREIGN KEY REFERENCES Услуги(код),
+        статус NVARCHAR(20) DEFAULT 'Назначена',
+        дата_выполнения DATETIME NULL,
+        id_лаборанта INT NULL FOREIGN KEY REFERENCES Пользователи(id),
+        id_анализатора INT NULL,
+        результат NVARCHAR(MAX) NULL,
+        дата_назначения DATETIME DEFAULT GETDATE()
+    );
+    PRINT 'Таблица УслугиВЗаказе создана';
+END
+GO
+
+-- Таблица Анализаторов
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Анализаторы')
+BEGIN
+    CREATE TABLE Анализаторы (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        название NVARCHAR(100) NOT NULL,
+        производитель NVARCHAR(100) NULL,
+        модель NVARCHAR(100) NULL,
+        дата_ввода_в_эксплуатацию DATE NULL,
+        дата_последней_поверки DATE NULL
+    );
+    PRINT 'Таблица Анализаторы создана';
+END
+GO
+
+-- Таблица История входов
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'ИсторияВходов')
+BEGIN
+    CREATE TABLE ИсторияВходов (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        id_пользователя INT NULL FOREIGN KEY REFERENCES Пользователи(id),
+        время_попытки DATETIME DEFAULT GETDATE(),
+        успешна BIT NOT NULL,
+        ip_адрес NVARCHAR(15) NULL,
+        captcha_использована BIT DEFAULT 0,
+        userAgent NVARCHAR(255) NULL
+    );
+    PRINT 'Таблица ИсторияВходов создана';
+END
+GO
+
+-- Таблица Блокировок
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Блокировки')
+BEGIN
+    CREATE TABLE Блокировки (
+        id INT IDENTITY(1,1) PRIMARY KEY,
+        id_пользователя INT NULL FOREIGN KEY REFERENCES Пользователи(id),
+        ip_адрес NVARCHAR(15) NULL,
+        время_начала DATETIME DEFAULT GETDATE(),
+        длительность_минуты INT DEFAULT 1,
+        причина NVARCHAR(255) NULL,
+        дата_окончания AS DATEADD(MINUTE, длительность_минуты, время_начала) PERSISTED
+    );
+    PRINT 'Таблица Блокировки создана';
+END
+GO
+
+-- 3. Заполнение тестовыми данными (если таблицы пустые)
+
+-- Роли
+IF NOT EXISTS (SELECT 1 FROM Роли)
+BEGIN
+    INSERT INTO Роли (название, описание) VALUES
+    ('Администратор', 'Полный доступ к системе'),
+    ('Лаборант', 'Прием биоматериала и формирование заказов'),
+    ('Лаборант-исследователь', 'Проведение исследований на анализаторах'),
+    ('Бухгалтер', 'Формирование финансовых отчетов и счетов');
+    
+    PRINT 'Добавлены тестовые роли';
+END
+GO
+
+-- Страховые компании
+IF NOT EXISTS (SELECT 1 FROM СтраховыеКомпании)
+BEGIN
+    INSERT INTO СтраховыеКомпании (название, адрес, ИНН, расчетный_счет, БИК, телефон, email) VALUES
+    ('Страховая компания "Здоровье"', 'г. Санкт-Петербург, ул. Медицинская, 1', '1234567890', '40702810100010000001', '044525201', '+78121234567', 'info@zdorovie.ru'),
+    ('Медицинская страховая группа', 'г. Санкт-Петербург, пр. Науки, 15', '0987654321', '40702810200020000002', '044525202', '+78129876543', 'contact@msg.ru');
+    
+    PRINT 'Добавлены тестовые страховые компании';
+END
+GO
+
+-- Пользователи
+IF NOT EXISTS (SELECT 1 FROM Пользователи)
+BEGIN
+    DECLARE @adminRoleId INT = (SELECT id FROM Роли WHERE название = 'Администратор');
+    DECLARE @labRoleId INT = (SELECT id FROM Роли WHERE название = 'Лаборант');
+    DECLARE @researcherRoleId INT = (SELECT id FROM Роли WHERE название = 'Лаборант-исследователь');
+    DECLARE @accountantRoleId INT = (SELECT id FROM Роли WHERE название = 'Бухгалтер');
+    
+    INSERT INTO Пользователи (логин, пароль, фамилия, имя, отчество, id_роли) VALUES
+    ('admin', 'admin123', 'Иванов', 'Иван', 'Иванович', @adminRoleId),
+    ('lab1', 'lab1123', 'Петрова', 'Мария', 'Сергеевна', @labRoleId),
+    ('researcher1', 'researcher1123', 'Сидоров', 'Алексей', 'Владимирович', @researcherRoleId),
+    ('accountant1', 'accountant1123', 'Кузнецова', 'Елена', 'Дмитриевна', @accountantRoleId);
+    
+    PRINT 'Добавлены тестовые пользователи';
+END
+GO
+
+-- Услуги
+IF NOT EXISTS (SELECT 1 FROM Услуги)
+BEGIN
+    INSERT INTO Услуги (код, наименование, стоимость, срок_выполнения, среднее_отклонение) VALUES
+    (1001, 'Общий анализ крови', 500.00, 1, 0.5),
+    (1002, 'Биохимический анализ крови', 1200.00, 2, 1.2),
+    (1003, 'Анализ мочи общий', 400.00, 1, 0.3),
+    (1004, 'Глюкоза крови', 300.00, 1, 0.2),
+    (1005, 'Гормоны щитовидной железы', 1500.00, 3, 1.5);
+    
+    PRINT 'Добавлены тестовые услуги';
+END
+GO
+
+-- Пациенты
+IF NOT EXISTS (SELECT 1 FROM Пациенты)
+BEGIN
+    DECLARE @insurance1 INT = (SELECT id FROM СтраховыеКомпании WHERE название LIKE '%Здоровье%');
+    DECLARE @insurance2 INT = (SELECT id FROM СтраховыеКомпании WHERE название LIKE '%Медицинская%');
+    
+    INSERT INTO Пациенты (фамилия, имя, отчество, дата_рождения, серия_паспорта, номер_паспорта, телефон, email, номер_полиса, тип_полиса, id_страховой_компании) VALUES
+    ('Смирнов', 'Александр', 'Владимирович', '1980-05-15', '1234', '567890', '+79111234567', 'smirnov@mail.ru', '123456789012', 'ОМС', @insurance1),
+    ('Ковалева', 'Ольга', 'Игоревна', '1992-11-23', '4321', '098765', '+79119876543', 'kovaleva@gmail.com', '987654321098', 'ДМС', @insurance2),
+    ('Николаев', 'Дмитрий', 'Сергеевич', '1975-03-08', '1111', '222333', '+79115556677', 'nikolaev@yandex.ru', '456789123456', 'ОМС', @insurance1);
+    
+    PRINT 'Добавлены тестовые пациенты';
+END
+GO
+
+-- 4. Полезные запросы
+
+-- Просмотр всех заказов с информацией о пациентах
+SELECT 
+    z.id AS 'Номер заказа',
+    z.штрих_код AS 'Штрих-код',
+    z.дата_создания AS 'Дата создания',
+    z.статус AS 'Статус',
+    p.фамилия + ' ' + p.имя + ' ' + ISNULL(p.отчество, '') AS 'Пациент',
+    p.номер_полиса AS 'Номер полиса',
+    sc.название AS 'Страховая компания'
+FROM 
+    Заказы z
+    JOIN Пациенты p ON z.id_пациента = p.id
+    LEFT JOIN СтраховыеКомпании sc ON p.id_страховой_компании = sc.id
+ORDER BY 
+    z.дата_создания DESC;
+GO
+
+-- Просмотр услуг в заказе
+SELECT 
+    uz.id_заказа AS 'Номер заказа',
+    u.наименование AS 'Услуга',
+    u.стоимость AS 'Стоимость',
+    uz.статус AS 'Статус услуги',
+    uz.дата_назначения AS 'Дата назначения',
+    uz.дата_выполнения AS 'Дата выполнения'
+FROM 
+    УслугиВЗаказе uz
+    JOIN Услуги u ON uz.код_услуги = u.код
+ORDER BY 
+    uz.id_заказа, uz.дата_назначения;
+GO
+
+-- Количество заказов по статусам
+SELECT 
+    статус AS 'Статус заказа',
+    COUNT(*) AS 'Количество'
+FROM 
+    Заказы
+GROUP BY 
+    статус
+ORDER BY 
+    COUNT(*) DESC;
+GO
+
+-- 5. Создание хранимых процедур
+
+-- Процедура для создания нового заказа
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'СоздатьЗаказ')
+DROP PROCEDURE СоздатьЗаказ;
+GO
+
+CREATE PROCEDURE СоздатьЗаказ
+    @id_пациента INT,
+    @id_врача INT = NULL,
+    @код_услуги INT,
+    @комментарий NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    DECLARE @новый_штрих_код NVARCHAR(50);
+    DECLARE @id_заказа INT;
+    
+    -- Генерация нового штрих-кода (последний ID + 1)
+    SELECT @новый_штрих_код = ISNULL(MAX(id), 0) + 1 FROM Заказы;
+    
+    -- Создание заказа
+    INSERT INTO Заказы (id_пациента, штрих_код, id_врача, комментарий)
+    VALUES (@id_пациента, @новый_штрих_код, @id_врача, @комментарий);
+    
+    SET @id_заказа = SCOPE_IDENTITY();
+    
+    -- Добавление услуги в заказ
+    INSERT INTO УслугиВЗаказе (id_заказа, код_услуги)
+    VALUES (@id_заказа, @код_услуги);
+    
+    -- Возврат номера созданного заказа
+    SELECT @id_заказа AS 'НомерЗаказа', @новый_штрих_код AS 'ШтрихКод';
+END
+GO
+
+PRINT 'Хранимая процедура СоздатьЗаказ создана';
+GO
+
+-- Процедура для добавления услуги в существующий заказ
+IF EXISTS (SELECT * FROM sys.objects WHERE type = 'P' AND name = 'ДобавитьУслугуВЗаказ')
+DROP PROCEDURE ДобавитьУслугуВЗаказ;
+GO
+
+CREATE PROCEDURE ДобавитьУслугуВЗаказ
+    @id_заказа INT,
+    @код_услуги INT,
+    @id_лаборанта INT = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    IF NOT EXISTS (SELECT 1 FROM Заказы WHERE id = @id_заказа)
+    BEGIN
+        RAISERROR('Заказ с указанным ID не существует', 16, 1);
+        RETURN;
+    END
+    
+    IF NOT EXISTS (SELECT 1 FROM Услуги WHERE код = @код_услуги)
+    BEGIN
+        RAISERROR('Услуга с указанным кодом не существует', 16, 1);
+        RETURN;
+    END
+    
+    INSERT INTO УслугиВЗаказе (id_заказа, код_услуги, id_лаборанта)
+    VALUES (@id_заказа, @код_услуги, @id_лаборанта);
+    
+    SELECT 'Услуга успешно добавлена в заказ' AS Результат;
+END
+GO
+
+PRINT 'Хранимая процедура ДобавитьУслугуВЗаказ создана';
+GO
+
+-- 6. Пример использования хранимых процедур
+
+-- Создание нового заказа
+DECLARE @patientId INT = (SELECT TOP 1 id FROM Пациенты);
+DECLARE @doctorId INT = (SELECT TOP 1 id FROM Пользователи WHERE фамилия = 'Петрова');
+DECLARE @serviceCode INT = 1001;
+
+EXEC СоздатьЗаказ 
+    @id_пациента = @patientId,
+    @id_врача = @doctorId,
+    @код_услуги = @serviceCode,
+    @комментарий = 'Плановый осмотр';
+GO
+
+-- Добавление услуги в существующий заказ
+DECLARE @orderId INT = (SELECT TOP 1 id FROM Заказы ORDER BY id DESC);
+DECLARE @newServiceCode INT = 1002;
+DECLARE @labAssistantId INT = (SELECT TOP 1 id FROM Пользователи WHERE фамилия = 'Петрова');
+
+EXEC ДобавитьУслугуВЗаказ
+    @id_заказа = @orderId,
+    @код_услуги = @newServiceCode,
+    @id_лаборанта = @labAssistantId;
+GO
